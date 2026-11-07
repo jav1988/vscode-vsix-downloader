@@ -3,7 +3,7 @@
 """VSCode 扩展离线包（VSIX）下载器。
 
 作者：马小战
-版本：1.0.2
+版本：1.0.3
 
 只用 Python 标准库，不装任何第三方包，Windows / Linux / WSL 直接可跑。
 默认不带参数运行会打印帮助信息。
@@ -11,7 +11,7 @@
 VSCode Extension VSIX offline downloader.
 
 Author : 马小战
-Version: 1.0.2
+Version: 1.0.3
 
 Pure standard library, zero third-party dependency. Runs on Windows / Linux / WSL
 with a plain `python` or `python3`. Running it without arguments prints the help.
@@ -34,7 +34,7 @@ from urllib import request as urlrequest
 # 常量区 / Constants
 # ---------------------------------------------------------------------------
 
-__version__ = "1.0.2"
+__version__ = "1.0.3"
 __author__ = "马小战"
 
 # 扩展市场查询接口 / The marketplace query endpoint
@@ -402,18 +402,25 @@ def extract_version_entries(extension):
     """
     entries = []
     for node in extension.get("versions") or []:
+        platform = node.get("targetPlatform") or ""
         files = node.get("files") or []
         direct_url = ""
         for item in files:
             if item.get("assetType") == VSIX_ASSET_TYPE:
                 direct_url = item.get("source") or ""
                 break
+        fallback_base = node.get("fallbackAssetUri") or node.get("assetUri")
+        fallback_url = ""
+        if fallback_base:
+            fallback_url = fallback_base.rstrip("/") + "/" + VSIX_ASSET_TYPE
+            if platform:
+                fallback_url += "?" + urlparse.urlencode({"targetPlatform": platform})
         entries.append(
             {
                 "version": node.get("version") or "0.0.0",
-                "platform": node.get("targetPlatform") or "",
+                "platform": platform,
                 "direct_url": direct_url,
-                "fallback_url": node.get("assetUri") or "",
+                "fallback_url": fallback_url,
                 "last_updated": node.get("lastUpdated") or "",
             }
         )
@@ -640,7 +647,7 @@ def download_one(entry, ext_id, out_dir, opener, timeout, force):
         raise RuntimeError("扩展 {0} 没有可用的下载地址".format(ext_id))
 
     last_problem = ""
-    for url in urls:
+    for url in dict.fromkeys(urls):
         log_info("下载 {0} -> {1}".format(file_name, url))
         try:
             data, _ = download_bytes(opener, url, timeout)
